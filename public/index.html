@@ -1,0 +1,368 @@
+<!-- head tag for title, customized stylesheet -->
+
+<head>
+    <link rel="stylesheet" href="../styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <title>Chain Reaction</title>
+</head>
+
+<script>
+    //declare variables: rows and columns for grid layout
+    //no of players, gameover to check if it is done, turn to switch between players
+    var socket = io();
+    const gameId = window.location.pathname.split('/').pop();
+    let rowsAndColumns = 10
+    let gameOver = false
+    let players = ["red", "green"]
+    let playerIds = []
+    let playerCells = {}
+    let turn = 0
+    let occupiedCells = 0//check how many cells have values
+    let values = {}//check the count in each cell
+    let cellOwner = {}//keep track of the owner of cell
+    let maxCapacity = {}//max capacity of each cell
+    //reset function
+    function reset() {
+        socket.emit('resetgame', gameId)
+    }
+    function resetAll() {
+        for (let player of players) {
+            playerCells[player] = 0
+        }
+        gameOver = false;
+        turn = 0
+        occupiedCells = 0
+        values = {}
+        cellOwner = {}
+        document.querySelectorAll('#grid > *').forEach(cell => {
+            cell.replaceChildren(); // Removes all child elements inside each cell
+        });
+        //set styles for the game over div
+        document.getElementById("winner").innerHTML = "";
+        document.getElementById("go").style.zIndex = -10
+        document.getElementById("go").style.backgroundColor = "black"
+        const element = document.querySelector('#grid');
+        element.style.pointerEvents = '';
+        let root = document.querySelector('body');
+        root.style.setProperty('--grid-line-color', players[turn]);
+    }
+
+    //increase count for other cells when a current cell bursts
+    function increaseCount(i, j, visited = new Set()) {
+        const processCell = (x, y) => {
+            //boundary check
+            if (x < 0 || y < 0 || x >= rowsAndColumns || y >= rowsAndColumns) return;
+            let loc = String(x) + String(y);
+            //prevents infinite recursion on the same cell
+            if (visited.has(loc)) return;
+            //mark the cell as visited
+            visited.add(loc);
+            let locCell = document.getElementById(loc);
+            //prevent accessing non-existing elements
+            if (!locCell) return;
+            if (values[loc]) {
+                values[loc]++;
+                if (values[loc] > maxCapacity[loc]) {
+                    //overflowing condition
+                    values[loc] = 0;
+                    occupiedCells--;
+                    playerCells[cellOwner[loc]]--;
+                    cellOwner[loc] = undefined;
+                    locCell.replaceChildren();
+                    socket.emit('updatecell', { gameId, state: { cell: loc, value: 0, values, occupiedCells, playerCells, cellOwner, visited } });
+                    //recursive calls for the neighbors
+                    //up
+                    processCell(x - 1, y);
+                    //down
+                    processCell(x + 1, y);
+                    //left
+                    processCell(x, y - 1);
+                    //right
+                    processCell(x, y + 1);
+                } else {
+                    playerCells[cellOwner[loc]]--;
+                    cellOwner[loc] = players[turn];
+                    playerCells[cellOwner[loc]]++;
+                    //emit event when data is updated
+                    socket.emit('updatecell', { gameId, state: { cell: loc, value: values[loc], cellColor: players[turn], values, occupiedCells, playerCells, cellOwner, visited } });
+                    //update the inner element of the div 
+                    values[loc] === 1 ? make1(locCell, players[turn]) : values[loc] === 2 ? make2(locCell, players[turn]) : make3(locCell, players[turn]);
+                }
+            } else {
+                //cell was empty
+                //make the changes and emit the updated value
+                values[loc] = 1;
+                cellOwner[loc] = players[turn];
+                playerCells[players[turn]]++;
+                occupiedCells++;
+                socket.emit('updatecell', { gameId, state: { cell: loc, value: 1, cellColor: players[turn], values, occupiedCells, playerCells, cellOwner, visited } });
+                make1(locCell, players[turn]);
+            }
+        };
+
+        //start recursion with tracking
+        //up
+        processCell(i - 1, j);
+        //down
+        processCell(i + 1, j);
+        //left
+        processCell(i, j - 1);
+        //right
+        processCell(i, j + 1);
+    }
+    //replace the cell inner content with latest information
+    //remove everythign from the cell
+    function make0(cell, cellColor) {
+        cell.replaceChildren()
+    }
+    //replace the cell inner content with latest information
+    //update the cell value and add the new ui
+    function make1(cell, cellColor) {
+        cell.replaceChildren()
+        let newDiv = document.createElement("div");
+        newDiv.classList.add(cellColor + "-circle");
+        cell.appendChild(newDiv);
+    }
+    //replace the cell inner content with latest information
+    //update the cell value and add the new ui with animation
+    function make2(cell, cellColor) {
+        cell.replaceChildren()
+        let mainDiv = document.createElement("div");
+        mainDiv.classList.add("d-flex", "rotate");
+        let leftDiv = document.createElement("div");
+        let rightDiv = document.createElement("div");
+        leftDiv.classList.add(cellColor + "-circle");
+        rightDiv.classList.add(cellColor + "-circle");
+        mainDiv.appendChild(leftDiv);
+        mainDiv.appendChild(rightDiv)
+        cell.appendChild(mainDiv)
+    }
+    //replace the cell inner content with latest information
+    //update the cell value and add the new ui with animation
+    function make3(cell, cellColor) {
+        cell.replaceChildren()
+        let mainDiv = document.createElement("div");
+        mainDiv.classList.add("d-flex", "flex-direction-column", "rotate", "j-c-c", "a-i-c", "m-a")
+        let upCircle = document.createElement("div");
+        upCircle.classList.add(cellColor + "-circle")
+        let bottomDiv = document.createElement("div");
+        bottomDiv.classList.add("d-flex", "flex-direction-row", "h-100", "w-100")
+        let left = document.createElement("div");
+        left.classList.add(cellColor + "-circle")
+        let right = document.createElement("div");
+        right.classList.add(cellColor + "-circle")
+        bottomDiv.appendChild(left)
+        bottomDiv.appendChild(right)
+        mainDiv.appendChild(upCircle)
+        mainDiv.appendChild(bottomDiv)
+        cell.append(mainDiv)
+    }
+
+    function GameOver(winner) {
+        //set styles for the game over div
+        document.getElementById("winner").innerHTML = winner + " Wins!";
+        document.getElementById("go").style.zIndex = 10
+        document.getElementById("go").style.backgroundColor = winner
+        const element = document.querySelector('#grid');
+        element.style.pointerEvents = 'none';
+    }
+
+    if (gameId) {
+        socket.emit('joingame', (gameId))
+    }
+
+    //set grid layout when DOM content has loaded
+    document.addEventListener("DOMContentLoaded", () => {
+        //socket events
+        //when a user joins a new game or existing game
+        socket.on('joingame', ({ gameId, state }) => {
+            //update all div elements in the grid
+            if (!state.newGame) {
+                for (let ucell of Object.keys(state.values)) {
+                    let ncell = document.getElementById(ucell);
+                    if (state.values[ucell] == 1) {
+                        make1(ncell, state.cellOwner[ucell])
+                    } else if (state.values[ucell] == 2) {
+                        make2(ncell, state.cellOwner[ucell])
+                    } else if (state.values[ucell] == 3) {
+                        make3(ncell, state.cellOwner[ucell])
+                    }
+                }
+                turn = state.turn
+                root.style.setProperty('--grid-line-color', players[turn]);
+                playerCells = state.playerCells;
+                gameOver = state.gameOver;
+                cellOwner = state.cellOwner;
+                occupiedCells = state.occupiedCells;
+                values = state.values;
+                playerIds = state.playerIds
+            }
+            //sync the states between all users
+            socket.emit('syncstates', {
+                gameId, state: {
+                    turn,
+                    playerCells,
+                    gameOver,
+                    cellOwner,
+                    occupiedCells,
+                    values,
+                    newGame: false,
+                    playerIds: state.playerIds
+                }
+            })
+        })
+        //reset the game
+        socket.on('resetgame', (gameId) => {
+            resetAll()
+        })
+        //sync states event
+        socket.on('syncstates', ({ gameId, state }) => {
+            turn = state.turn
+            playerCells = state.playerCells;
+            gameOver = state.gameOver;
+            cellOwner = state.cellOwner;
+            occupiedCells = state.occupiedCells;
+            values = state.values;
+            playerIds = state.playerIds
+            root.style.setProperty('--grid-line-color', players[turn]);
+            if (gameOver) {
+                GameOver(playerCells["red"] == occupiedCells ? "red" : "green")
+            }
+        })
+        //updates when a click event is triggered and send the changes for that cell to all users
+        socket.on('updatecell', ({ gameId, state }) => {
+            let ncell = document.getElementById(state.cell);
+            playerCells = state.playerCells;
+            cellOwner = state.cellOwner;
+            occupiedCells = state.occupiedCells;
+            values = state.values;
+            if (state.value == 0) {
+                make0(ncell, state.cellColor)
+            } else if (state.value == 1) {
+                make1(ncell, state.cellColor)
+            } else if (state.value == 2) {
+                make2(ncell, state.cellColor)
+            } else if (state.value == 3) {
+                make3(ncell, state.cellColor)
+            }
+        })
+        const grid = document.getElementById("grid");
+        //set all the players count to 0
+        for (let player of players) {
+            playerCells[player] = 0
+        }
+        let root = document.querySelector('body');
+        let rootStyles = getComputedStyle(root);
+        //set the grid line color to red by default
+        let lineColor = rootStyles.getPropertyValue('--grid-line-color');
+        rowsAndColumns = rootStyles.getPropertyValue('--rowsAndColumns');
+        let lastButOne = rowsAndColumns - 1;
+        let lastStr = String(lastButOne);
+        //for each row and column
+        for (let i = 0; i < rowsAndColumns; i++) {
+            for (let j = 0; j < rowsAndColumns; j++) {
+                //create the cell
+                let cell = document.createElement("div");
+                cell.classList.add("cell");
+                //create an id and assign to the cell
+                cell.id = String(i) + String(j)
+                //give the max capacity to the cell
+                maxCapacity[cell.id] = (i == 0 || i == lastButOne || j == 0 || j == lastButOne) ? 2 : 3;
+                //Edge case for corner cells to have 2
+                maxCapacity["00"] = 1
+                maxCapacity["0" + lastStr] = 1
+                maxCapacity[lastStr + "0"] = 1
+                maxCapacity[lastStr + lastStr] = 1
+                grid.appendChild(cell);
+                //cell.innerHTML = `<style>.styled-text {color: white;font-size: 16px;}</style><span class="styled-text">${maxCapacity[cell.id]}</span>`;
+                //function when cell is clicked
+                cell.addEventListener("click", function () {
+                    //check if game is not over and there is noone who owns the cell or the cell owner is the current player
+                    if (!gameOver && (!cellOwner[cell.id] || cellOwner[cell.id] == players[turn])) {
+                        //if the clicked cell already has a value
+                        if (values[cell.id]) {
+                            //replace the cell content with updated content
+                            cell.replaceChildren();
+                            //increase the value of that cell
+                            values[cell.id]++;
+                            //check if the cell value cross the limit
+                            if (values[cell.id] > maxCapacity[cell.id]) {
+                                //if croosed reset the value of cell
+                                values[cell.id] = 0
+                                //update the cells owner count
+                                playerCells[players[turn]]--;
+                                //as the cell is 0 now decrease the occupied cells
+                                occupiedCells--;
+                                //no owner for the cell
+                                cellOwner[cell.id] = undefined;
+                                socket.emit('updatecell', { gameId, state: { cell: cell.id, value: 0, playerIds, values, occupiedCells, playerCells, cellOwner } })
+                                //recursive function to check all the other cells and neighbour cells of those cells
+                                increaseCount(i, j)
+                            }
+                            else if (values[cell.id] == 2) {
+                                //update the divs inner content
+                                socket.emit('updatecell', { gameId, state: { cell: cell.id, value: values[cell.id], cellColor: players[turn], playerIds, values, occupiedCells, playerCells, cellOwner } })
+                                make2(cell, players[turn])
+                            }
+                            else if (values[cell.id] == 3) {
+                                //update the divs inner content
+                                socket.emit('updatecell', { gameId, state: { cell: cell.id, value: values[cell.id], cellColor: players[turn], playerIds, values, occupiedCells, playerCells, cellOwner } })
+                                make3(cell, players[turn])
+                            }
+                        }
+                        else {
+                            //else set it to 1
+                            //increase the occupied cell count and the current players cell count
+                            occupiedCells++;
+                            playerCells[players[turn]]++;
+                            values[cell.id] = 1
+                            cellOwner[cell.id] = players[turn];
+                            make1(cell, players[turn])
+                            socket.emit('updatecell', { gameId, state: { cell: cell.id, value: values[cell.id], cellColor: players[turn], playerIds, values, occupiedCells, playerCells, cellOwner } })
+                        }
+                        //update the turn
+                        turn = Number(!turn);
+                        //change the grid line to the current players color
+                        root.style.setProperty('--grid-line-color', players[turn]);
+                        //check game over only if there is more than 1 cell
+                        //so that all players had their turn
+                        if (occupiedCells > 1) {
+                            for (let player of players) {
+                                if (playerCells[player] == occupiedCells) {
+                                    gameOver = true;
+                                    GameOver(player)
+                                }
+                            }
+                        }
+                        socket.emit('syncstates', {
+                            gameId, state: {
+                                turn,
+                                playerCells,
+                                gameOver,
+                                cellOwner,
+                                occupiedCells,
+                                values,
+                                newGame: false,
+                                playerIds
+                            }
+                        })
+                    }
+                })
+            }
+        }
+    });
+</script>
+<!--grid div-->
+<div class="home">
+    <div class="layout">
+        <h1 class="header">Chain Reaction</h1>
+        <div id="grid">
+        </div>
+    </div>
+    <!--displays when game is over-->
+    <div class="game-over" id="go">
+        <h1>Game Over</h1>
+        <p id="winner"></p>
+        <button onclick="reset()" class="reset">Reset</button>
+    </div>
+</div>

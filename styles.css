@@ -1,0 +1,150 @@
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: black;
+    --grid-line-color: red;
+    --rowsAndColumns: 5;
+}
+
+.home {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#grid {
+    display: grid;
+    width: 95vw;
+    height: 85vh;
+    grid-template-columns: repeat(var(--rowsAndColumns), 1fr);
+    grid-template-rows: repeat(var(--rowsAndColumns), 1fr);
+}
+
+#winner {
+    font-size: 2rem;
+}
+
+#grid:hover {
+    cursor: pointer;
+}
+
+.header {
+    color: white;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.j-c-c {
+    justify-content: center;
+}
+
+.a-i-c {
+    align-items: center;
+}
+
+.h-100 {
+    height: 100%
+}
+
+.w-100 {
+    width: 100%;
+}
+
+.flex-direction-column {
+    flex-direction: column;
+}
+
+.flex-direction-row {
+    flex-direction: row;
+}
+
+.cell {
+    border: 0.5px dotted var(--grid-line-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.red-circle {
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #ff5722, #e91e63);
+    border-radius: 50%;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.m-a {
+    margin: auto;
+}
+
+.rotate {
+    animation: spin 2s linear infinite, fadeIn 1s;
+}
+
+.green-circle {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #6aff6a, #008000);
+    box-shadow:
+        inset -5px -5px 10px rgba(0, 100, 0, 0.6),
+        5px 5px 10px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.game-over {
+    height: 40%;
+    width: 60%;
+    position: absolute;
+    z-index: -10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border-radius: 1rem;
+    opacity: 90%;
+}
+
+.reset {
+    border: none;
+    border-radius: 1rem;
+    padding: 1rem;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 1rem;
+}
+
+.reset:hover {
+    cursor: pointer;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
